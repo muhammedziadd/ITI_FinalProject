@@ -1,0 +1,67 @@
+import { useState } from 'react'
+import axios from 'axios'
+
+const PlantHealth = () => {
+  const [selectedImage, setSelectedImage] = useState(null)
+  const [analysis, setAnalysis] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0]
+    if (file) {
+      setSelectedImage(URL.createObjectURL(file))
+      const formData = new FormData()
+      formData.append('image', file)
+      
+      setLoading(true)
+      try {
+        const response = await axios.post('YOUR_API_ENDPOINT/plant-analysis', formData)
+        setAnalysis(response.data)
+      } catch (error) {
+        console.error('Error analyzing image:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow">
+      <h2 className="text-2xl font-bold mb-4">Plant Health Analysis</h2>
+      <div className="mb-4">
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleImageUpload}
+          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+        />
+      </div>
+      
+      {selectedImage && (
+        <div className="mb-4">
+          <img src={selectedImage} alt="Selected plant" className="max-w-md mx-auto rounded-lg" />
+        </div>
+      )}
+
+      {loading && (
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-700 mx-auto"></div>
+          <p className="mt-2">Analyzing image...</p>
+        </div>
+      )}
+
+      {analysis && (
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+          <h3 className="text-xl font-semibold mb-2">Analysis Results</h3>
+          <div className="space-y-2">
+            <p><strong>Health Status:</strong> {analysis.status}</p>
+            <p><strong>Disease Detection:</strong> {analysis.disease || 'No diseases detected'}</p>
+            <p><strong>Recommendations:</strong> {analysis.recommendations}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default PlantHealth

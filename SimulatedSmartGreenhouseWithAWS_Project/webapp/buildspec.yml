@@ -1,0 +1,32 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - echo Build started on `date`
+      - cd AWS-Project/webapp
+      - echo Current directory is `pwd`
+      - echo Listing files...
+      - ls -la
+  
+  build:
+    commands:
+      - echo Build phase started on `date`
+      - echo Installing dependencies...
+      - npm install
+      - echo Running build if available...
+      - npm run build || echo "No build script found, skipping build step"
+      - echo Build phase completed
+  
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Creating deployment files...
+      - echo Copying deployment configuration...
+
+artifacts:
+  files:
+    - '**/*'
+  base-directory: 'AWS-Project/webapp'
+  name: SmartGreenHouse-$(date +%Y-%m-%d)

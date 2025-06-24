@@ -1,0 +1,134 @@
+import json
+import boto3
+from datetime import datetime, timedelta
+
+timestream = boto3.client('timestream-query')
+
+DATABASE_NAME = 'GreenhouseDB'
+TABLE_NAME = 'SensorData'
+
+def lambda_handler(event, context):
+    try:
+        # Enable CORS
+        headers = {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+        }
+        
+        # Handle OPTIONS request for CORS preflight
+        if event.get('httpMethod') == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': ''
+            }
+        
+        # Get query parameters
+        path = event.get('path', '')
+        
+        if '/sensors' in path:
+            return get_sensor_data(headers)
+        elif '/nutrients' in path:
+            return get_nutrient_data(headers)
+        else:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Invalid endpoint'})
+            }
+            
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def get_sensor_data(headers):
+    # Query last 24 hours of sensor data
+    query = f"""
+    SELECT 
+        measure_name,
+        measure_value::double as value,
+        time
+    FROM "{DATABASE_NAME}"."{TABLE_NAME}"
+    WHERE time >= ago(24h)
+    AND measure_name IN ('temperature', 'humidity', 'light', 'soil_moisture', 'tds')
+    ORDER BY time DESC
+    """
+    
+    response = timestream.query(QueryString=query)
+    
+    # Organize data by sensor type
+    sensor_data = {
+        'temperature': [],
+        'humidity': [],
+        'light': [],
+        'soilMoisture': [],
+        'tds': []
+    }
+    
+    for row in response['Rows']:
+        measure_name = row['Data'][0]['ScalarValue']
+        value = float(row['Data'][1]['ScalarValue'])
+        timestamp = row['Data'][2]['ScalarValue']
+        
+        # Map measure names to frontend keys
+        key_mapping = {
+            'temperature': 'temperature',
+            'humidity': 'humidity',
+            'light': 'light',
+            'soil_moisture': 'soilMoisture',
+            'tds': 'tds'
+        }
+        
+        if measure_name in key_mapping:
+            sensor_data[key_mapping[measure_name]].append({
+                'value': value,
+                'timestamp': timestamp
+            })
+    
+    return {
+        'statusCode': 200,
+        'headers': headers,
+        'body': json.dumps(sensor_data)
+    }
+
+def get_nutrient_data(headers):
+    # Query NPK data
+    query = f"""
+    SELECT 
+        nutrient,
+        measure_value::double as value,
+        time
+    FROM "{DATABASE_NAME}"."{TABLE_NAME}"
+    WHERE time >= ago(24h)
+    AND measure_name = 'soil_npk'
+    ORDER BY time DESC
+    """
+    
+    response = timestream.query(QueryString=query)
+    
+    # Group by timestamp
+    nutrient_data = {}
+    
+    for row in response['Rows']:
+        nutrient = row['Data'][0]['ScalarValue']
+        value = float(row['Data'][1]['ScalarValue'])
+        timestamp = row['Data'][2]['ScalarValue']
+        
+        if timestamp not in nutrient_data:
+            nutrient_data[timestamp] = {'timestamp': timestamp}
+        
+        nutrient_data[timestamp][nutrient] = value
+    
+    # Convert to array
+    result = list(nutrient_data.values())
+    
+    return {
+        'statusCode': 200,
+        'headers': headers,
+        'body': json.dumps(result)
+    }
